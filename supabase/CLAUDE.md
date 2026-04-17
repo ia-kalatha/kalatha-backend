@@ -17,7 +17,9 @@ supabase/
     0002_rls_policies.sql      # RLS em todas as tabelas
     0003_triggers_functions.sql # Triggers (stats, audit_log)
   functions/
-    server/                    # Edge function principal
+    server/                    # Edge function legada (Hono + kv_store)
+    verificar-midia/           # Análise de mídia (verificação de perfil)
+    send-push/                 # Envio de FCM push
   seed/                        # Dados de teste
 ```
 
@@ -69,10 +71,40 @@ Três buckets públicos:
 
 ## Edge Functions
 
-`functions/server/` — função principal (TypeScript/Deno). Deploy via:
+`functions/` — cada subpasta é uma Deno edge function independente.
+
+| Função | Propósito | Secrets |
+|---|---|---|
+| `server/` | Função legada (Hono + kv_store) | — |
+| `verificar-midia/` | Valida foto/vídeo enviado (3 slots verificação perfil). Mock 80% aprovado, TODO: plugar Vision AI real | `ANTHROPIC_API_KEY` (quando plugar) |
+| `send-push/` | FCM HTTP v1 com OAuth2 JWT RS256, cache token, audit log, auto-deactivate UNREGISTERED | `FCM_PROJECT_ID`, `FCM_SERVICE_ACCOUNT_JSON` |
+
+Deploy:
 ```bash
-supabase functions deploy server
+supabase functions deploy verificar-midia
+supabase functions deploy send-push
 ```
+
+Logs:
+```bash
+supabase functions logs send-push --tail
+```
+
+Setup Firebase completo em `functions/send-push/README.md`.
+
+## Campos adicionais (opcionais, retrocompatíveis)
+
+Colunas **opcionais** introduzidas para features futuras — podem estar ausentes em deployments antigos e o cliente faz fallback:
+
+- `corridas.elevacao_m` (numeric) — ganho de elevação
+- `corridas.fc_media` (smallint) — FC média em bpm
+- `corridas.fc_maxima` (smallint)
+- `corridas.horario_inicio` (text) — formato "HH:MM"
+- `desafios.plano_minimo` (text check in 'FREE','PRO','ELITE')
+- `desafios.titulo` (text)
+- `profiles.criado_em` (já existe) — consumido como "Membro desde {data}"
+
+Quando for adicionar, criar migration `0004_*` incremental — não editar `0001`.
 
 ## Comandos
 
